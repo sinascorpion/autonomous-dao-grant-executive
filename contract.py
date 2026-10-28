@@ -88,6 +88,11 @@ class AutonomousDAOGrantExecutive(gl.Contract):
         zero_addr = Address("0x0000000000000000000000000000000000000000")
         assert recipient != zero_addr, "Valid recipient address required"
         
+        # Exact accounting / refund excess funds attached
+        excess_deposit = attached_value - total_fund_amount
+        if excess_deposit > 0:
+            _Beneficiary(funder).emit_transfer(value=excess_deposit)
+        
         self.grant_counter += 1
         g_id = self.grant_counter
         key = str(g_id)
@@ -130,6 +135,11 @@ class AutonomousDAOGrantExecutive(gl.Contract):
         
         cur_stake = self.recipient_stakes.get(key, 0)
         self.recipient_stakes[key] = cur_stake + stake_amount
+        
+        # Exact accounting / refund excess stake attached
+        excess_stake = attached_value - stake_amount
+        if excess_stake > 0:
+            _Beneficiary(sender).emit_transfer(value=excess_stake)
 
     @gl.public.write
     def submit_milestone(self, grant_id: u64, deliverable_notes: str, proof_url: str) -> None:
@@ -379,6 +389,7 @@ Respond strictly in valid JSON format:
     def withdraw_funds(self, beneficiary: Address) -> u256:
         """
         Authorizes beneficiary to withdraw settled balances.
+        Transfers the native GEN value to the beneficiary via _Beneficiary emit_transfer.
         """
         sender = gl.message.sender_address
         assert sender == beneficiary, "Unauthorized: caller can only withdraw their own claimable balance"
@@ -387,6 +398,7 @@ Respond strictly in valid JSON format:
         assert balance > 0, "No claimable balance available for withdrawal"
         
         self.claimable_balances[str(beneficiary)] = 0
+        _Beneficiary(beneficiary).emit_transfer(value=balance)
         return balance
 
     @gl.public.view
